@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision import transforms as tp
+from torchvision import transforms as tx
 from torchvision.datasets import ImageNet
 
 
@@ -60,7 +60,7 @@ def visualize(dataloader):
 
     for i in range(dataloader.batch_size):
         img = samples[i].squeeze()
-        img = tp.ToPILImage()(img)
+        img = tx.ToPILImage()(img)
         id = ids[i].item()
         label = dataloader.dataset.classes[id][0]
         plt.imshow(img)
@@ -69,9 +69,9 @@ def visualize(dataloader):
 
 
 def train():
-    transforms = tp.Compose([
-        tp.ToTensor(),
-        tp.Resize(size=(224, 224)),
+    transforms = tx.Compose([
+        tx.ToTensor(),
+        tx.Resize(size=(224, 224)),
     ])
     train_set = ImageNet(root="./dataset", split="train", transform=transforms)
     val_set = ImageNet(root="./dataset", split="val", transform=transforms)
