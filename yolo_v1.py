@@ -1,59 +1,119 @@
+import cv2
 import matplotlib.pyplot as plt
+import numpy as np
+from cv2.dnn import Net, NMSBoxes
 from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import transforms as tx
 from torchvision.datasets import ImageNet
+
+from model import LocallyConnected2d, Darknet
 
 
 class YoloV1(nn.Module):
     def __init__(self):
         super().__init__()
         self.backbone = nn.Sequential(
-            nn.ZeroPad2d((2, 3, 2, 3)),  # input = 449 x 449 x 3, padding = 2 (same)
-            nn.Conv2d(in_channels=3, out_channels=64, kernel_size=(7, 7), stride=2),                # 224 x 224 x 64 (output)
-            nn.MaxPool2d(kernel_size=(2, 2), stride=2),                                             # 112 x 112 x 64
+            # input = 3 x 448 x 448
+            nn.Conv2d(in_channels=3, out_channels=64, kernel_size=(7, 7), stride=2, padding=3),     # 64 x 224 x 224 (output)
+            nn.LeakyReLU(),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=2),                                             # 64 x 112 x 112
 
-            nn.Conv2d(in_channels=64, out_channels=192, kernel_size=(3, 3), padding_mode='same'),   # 112 x 112 x 192
-            nn.MaxPool2d(kernel_size=(2, 2), stride=2),                                             # 56 x 56 x 192
+            nn.Conv2d(in_channels=64, out_channels=192, kernel_size=(3, 3), padding_mode='same'),   # 192 x 112 x 112
+            nn.LeakyReLU(),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=2),                                             # 192 x 56 x 56
 
-            nn.Conv2d(in_channels=192, out_channels=128, kernel_size=(1, 1)),                       # 56 x 56 x 128
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=(3, 3), padding_mode='same'),  # 56 x 56 x 256
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=(1, 1)),                       # 56 x 56 x 256
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3, 3), padding_mode='same'),  # 56 x 56 x 512
-            nn.MaxPool2d(kernel_size=(2, 2), stride=2),                                             # 28 x 28 x 512
+            nn.Conv2d(in_channels=192, out_channels=128, kernel_size=(1, 1)),                       # 128 x 56 x 56
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=(3, 3), padding_mode='same'),  # 256 x 56 x 56
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=(1, 1)),                       # 256 x 56 x 56
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3, 3), padding_mode='same'),  # 512 x 56 x 56
+            nn.LeakyReLU(),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=2),                                             # 512 x 28 x 28
 
-            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=(1, 1)),                       # 28 x 28 x 256
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3, 3), padding_mode='same'),  # 28 x 28 x 512
-            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=(1, 1)),                       # 28 x 28 x 256
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3, 3), padding_mode='same'),  # 28 x 28 x 512
-            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=(1, 1)),                       # 28 x 28 x 256
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3, 3), padding_mode='same'),  # 28 x 28 x 512
-            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=(1, 1)),                       # 28 x 28 x 256
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3, 3), padding_mode='same'),  # 28 x 28 x 512
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=(1, 1)),                       # 28 x 28 x 512
-            nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=(3, 3), padding_mode='same'), # 28 x 28 x 1024
-            nn.MaxPool2d(kernel_size=(2, 2), stride=2),                                             # 14 x 14 x 1024
+            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=(1, 1)),                       # 256 x 28 x 28
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3, 3), padding_mode='same'),  # 512 x 28 x 28
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=(1, 1)),                       # 256 x 28 x 28
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3, 3), padding_mode='same'),  # 512 x 28 x 28
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=(1, 1)),                       # 256 x 28 x 28
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3, 3), padding_mode='same'),  # 512 x 28 x 28
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=512, out_channels=256, kernel_size=(1, 1)),                       # 256 x 28 x 28
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(3, 3), padding_mode='same'),  # 512 x 28 x 28
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=(1, 1)),                       # 512 x 28 x 28
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=(3, 3), padding_mode='same'), # 1024 x 28 x 28
+            nn.LeakyReLU(),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=2),                                             # 1024 x 14 x 14
 
-            nn.Conv2d(in_channels=1024, out_channels=512, kernel_size=(1, 1)),                      # 14 x 14 x 512
-            nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=(3, 3), padding_mode='same'), # 14 x 14 x 1024
-            nn.Conv2d(in_channels=1024, out_channels=512, kernel_size=(1, 1)),                      # 14 x 14 x 512
-            nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=(3, 3), padding_mode='same'), # 14 x 14 x 1024
+            nn.Conv2d(in_channels=1024, out_channels=512, kernel_size=(1, 1)),                      # 512  x 14 x 14
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=(3, 3), padding_mode='same'), # 1024 x 14 x 14
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=1024, out_channels=512, kernel_size=(1, 1)),                      # 512  x 14 x 14
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=(3, 3), padding_mode='same'), # 1024 x 14 x 14
+            nn.LeakyReLU(),
         )
         self.neck = nn.Sequential(
-            nn.Conv2d(in_channels=1024, out_channels=1024, kernel_size=(3, 3), padding_mode='same'),            # 14 x 14 x 1024
-            nn.Conv2d(in_channels=1024, out_channels=1024, kernel_size=(3, 3), padding_mode='same', stride=2),  # 7 x 7 x 1024
-            nn.Conv2d(in_channels=1024, out_channels=1024, kernel_size=(3, 3), padding_mode='same'),            # 7 x 7 x 1024
-            nn.Conv2d(in_channels=1024, out_channels=1024, kernel_size=(3, 3), padding_mode='same'),            # 7 x 7 x 1024
-            # TODO add connected layer from [7 x 7 x 1024] to [4096]
-            # TODO add connected layer from [4096] to [7 x 7 x 30]
-            # bilinear transformation?
+            nn.Conv2d(in_channels=1024, out_channels=1024, kernel_size=(3, 3), padding_mode='same'),            # 1024 x 14 x 14
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=1024, out_channels=1024, kernel_size=(3, 3), padding_mode='same', stride=2),  # 1024 x 7 x 7
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=1024, out_channels=1024, kernel_size=(3, 3), padding_mode='same'),            # 1024 x 7 x 7
+            nn.LeakyReLU(),
+            nn.Conv2d(in_channels=1024, out_channels=1024, kernel_size=(3, 3), padding_mode='same'),            # 1024 x 7 x 7
+            nn.LeakyReLU(),
+
+            LocallyConnected2d(in_channels=1024, out_channels=256, output_size=(7, 7), kernel_size=(3, 3)),     # 256  x 7 x 7
+            nn.Dropout2d(p=0.5),
+
+            nn.Flatten(),                                       # 12544
+            nn.Linear(in_features=256*7*7, out_features=1715),  # 1715
+        )
+        # Not sure that it's the correct way
+        self.detection_for_train = nn.Sequential(
+            nn.AvgPool2d(kernel_size=(2, 2), stride=2),
+            nn.Linear(in_features=1715, out_features=1470),
+            nn.Unflatten(dim=1, unflattened_size=(7, 7, 30)),
+        )
+        # Not sure that it's the correct way
+        self.detection = nn.Sequential(
+            nn.Linear(in_features=1715, out_features=1470),
+            nn.Unflatten(dim=1, unflattened_size=(7, 7, 30)),
         )
 
     def forward(self, x):
-        pass
+        x = self.backbone(x)
+        x = self.neck(x)
+        if self.training:
+            # todo compute loss
+            pass
+        return x
 
 
-def visualize(dataloader):
+def plot_detection(darknet, img):
+    colors = np.random.uniform(low=0, high=255, size=(len(darknet.class_names), 3))
+    output = darknet.detect(img)
+    for i, (x1, y1, x2, y2, conf, id) in enumerate(output):
+        text = f"{darknet.class_names[id]} / conf={conf:.3f}"
+        cv2.rectangle(img, pt1=(x1, y1), pt2=(x2, y2), color=colors[id], thickness=2)
+        cv2.putText(img, text, org=(x1, y1+30), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=1.5, color=colors[id], thickness=2)
+    cv2.imshow("YOLO detection", img)
+    cv2.waitKeyEx()
+    cv2.destroyAllWindows()
+
+
+def plot_dataset(dataloader):
     samples, ids = next(iter(dataloader))
     print(f"Feature shape: {samples[0].size()}")
     print(f"Label shape: {ids[0].size()}")
@@ -78,6 +138,10 @@ def train():
     print("Classes:", train_set.classes)
     train_data = DataLoader(train_set, batch_size=4, shuffle=True, num_workers=4)
     val_data = DataLoader(val_set, batch_size=4, shuffle=True, num_workers=4)
-    visualize(train_data)
+    plot_dataset(train_data)
 
-train()
+# train()
+test_img = cv2.imread("dataset/test.jpg")
+darknet = Darknet()
+darknet.inspect_output_layers(test_img)
+plot_detection(darknet, test_img)
