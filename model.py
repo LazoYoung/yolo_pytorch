@@ -94,27 +94,8 @@ class Darknet:
             output_shape, = outLayerShapes[layer_id]
             print(f"{layer_name} : {input1_shape} + {input2_shape} -> {output_shape}")
 
-    def detect(self, img):
-        height, width = img.shape[0], img.shape[1]
+    def forward(self, img):
         blob_img = cv2.dnn.blobFromImage(img, 1. / 256, (448, 448), (0, 0, 0), swapRB=True)
         self.darknet.setInput(blob_img)
         out_layers = self.darknet.getUnconnectedOutLayersNames()
-        outputs = self.darknet.forward(out_layers)
-        boxes, scores, id = [], [], []
-
-        for output in outputs:
-            for feature in output:  # feature.shape = 85
-                pred_scores = feature[5:]
-                pred_class_id = np.argmax(pred_scores)
-                conf = feature[4]
-                if conf > 0.5:
-                    center_x, center_y = int(feature[0] * width), int(feature[1] * height),
-                    w, h = int(feature[2] * width), int(feature[3] * height),
-                    x, y = int(center_x - w / 2), int(center_y - h / 2),
-                    boxes.append((x, y, x + w, y + h))
-                    scores.append(conf)
-                    id.append(pred_class_id)
-
-        ind = NMSBoxes(boxes, scores, score_threshold=0.5, nms_threshold=0.4)
-        objects = [(*boxes[i], scores[i], id[i]) for i in range(len(boxes)) if i in ind]
-        return objects
+        return self.darknet.forward(out_layers)

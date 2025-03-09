@@ -101,11 +101,31 @@ class YoloV1(nn.Module):
         return x
 
 
-def plot_detection(darknet, img):
-    colors = np.random.uniform(low=0, high=255, size=(len(darknet.class_names), 3))
-    output = darknet.detect(img)
-    for i, (x1, y1, x2, y2, conf, id) in enumerate(output):
-        text = f"{darknet.class_names[id]} / conf={conf:.3f}"
+def detect_with_darknet(darknet, img):
+    boxes, scores, id = [], [], []
+    height, width = img.shape[0], img.shape[1]
+    outputs = darknet.forward(img)
+    for output in outputs:
+        for feature in output:  # feature.shape = 85
+            pred_scores = feature[5:]
+            pred_class_id = np.argmax(pred_scores)
+            conf = feature[4]
+            if conf > 0.5:
+                center_x, center_y = int(feature[0] * width), int(feature[1] * height),
+                w, h = int(feature[2] * width), int(feature[3] * height),
+                x, y = int(center_x - w / 2), int(center_y - h / 2),
+                boxes.append((x, y, x + w, y + h))
+                scores.append(conf)
+                id.append(pred_class_id)
+    ind = NMSBoxes(boxes, scores, score_threshold=0.5, nms_threshold=0.4)
+    pred = [(*boxes[i], scores[i], id[i]) for i in range(len(boxes)) if i in ind]
+    return pred
+
+
+def plot_detection(pred, class_names, img):
+    colors = np.random.uniform(low=0, high=255, size=(len(class_names), 3))
+    for i, (x1, y1, x2, y2, conf, id) in enumerate(pred):
+        text = f"{class_names[id]} / conf={conf:.3f}"
         cv2.rectangle(img, pt1=(x1, y1), pt2=(x2, y2), color=colors[id], thickness=2)
         cv2.putText(img, text, org=(x1, y1+30), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=1.5, color=colors[id], thickness=2)
     cv2.imshow("YOLO detection", img)
@@ -144,4 +164,5 @@ def train():
 test_img = cv2.imread("dataset/test.jpg")
 darknet = Darknet()
 darknet.inspect_output_layers(test_img)
-plot_detection(darknet, test_img)
+pred = detect_with_darknet(darknet, test_img)
+plot_detection(pred, darknet.class_names, test_img)
